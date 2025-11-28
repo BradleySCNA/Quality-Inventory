@@ -151,7 +151,7 @@ def home(req):
         return Redirect("/")
 
     return Titled(
-        "Quality Inventory Home",
+        Title("Quality Inventory Home"),
         Div(
             H1("Quality Inventory", cls="mb-4", style="width: 97%; text-align:center;"),
 
@@ -182,7 +182,7 @@ def add_item(values: dict | None = None,
     # If no POST data → render form
     if barcode is None and item_number is None:
         return Titled(
-            "Add New Item",
+            Title("Add New Item"),
             Div(
                 H2("Add New Item", cls="mb-4", style="width: 105%; text-align:center;"),
                 Div(
@@ -353,7 +353,7 @@ def remove_item(
 
     # Render page
     return Titled(
-        "Remove Item",
+        Title("Remove Item"),
         Div(
             H2("Remove Item", style="text-align:center; margin-bottom:20px;"),
             Div(
@@ -554,7 +554,7 @@ def transactions(
 
     # Render page
     return Titled(
-        "Transactions",
+        Title("Transactions"),
         Div(
             H2("Transactions", style="text-align:center; margin-bottom:20px;"),
             filter_row,
@@ -643,6 +643,7 @@ def edit_transaction(
 
     # If GET, render the page
     return Titled(
+        Title("Edit Transaction"),
         Div(
             H2(f"Edit Transaction: {trans_id}", cls="mb-4", style="width: 105%; text-align:center;"),
             Div(
@@ -835,7 +836,7 @@ def barcodes(
 
     # Render page
     return Titled(
-        "Barcodes",
+        Title("Barcodes"),
         Div(
             H2("Barcodes", style="text-align:center; margin-bottom:20px;"),
             filter_row,
@@ -916,6 +917,7 @@ def edit_barcode(
 
     # If GET, render the page
     return Titled(
+        Title("Edit Barcode"),
         Div(
             H2(f"Edit Barcode: {barcode}", cls="mb-4", style="width: 105%; text-align:center;"),
             Div(
@@ -1093,7 +1095,7 @@ def inventory(
 
     # Render page
     return Titled(
-        "Inventory",
+        Title("Inventory"),
         Div(
             H2("Inventory", style="text-align:center; margin-bottom:20px;"),
             filter_row,
