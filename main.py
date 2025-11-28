@@ -116,8 +116,10 @@ def df_to_html_table(df, link_trans_id=False, link_barcode=False):
 def login(password: str | None = None):
     error_message = None
 
+    # Check if the user input password is correct
     if password is not None:
         if password == PASSWORD:
+            # Go to the home page and set session cookie if password is correct
             return Response(
                 status_code=302,
                 headers={
@@ -129,6 +131,7 @@ def login(password: str | None = None):
             error_message = "Incorrect password"
 
     return Titled(
+        "Login to Quality Inventory",
         Div(
             H2("Enter Password"),
             Form(
@@ -136,17 +139,19 @@ def login(password: str | None = None):
                 Input(type="submit", value="Login", style=SUBMIT_BUTTON_STYLE),
                 method="POST"
             ),
-            P(error_message, style="color:red;") if error_message else Div()
+            P(error_message, style="color:red;") if error_message else Div() # Display an error message if the password is incorrect
         )
     )
 
 # Home page (requires login)
 @rt("/home")
 def home(req):
+    # Check if the user is logged in by verifying the session cookie
     if req.cookies.get("session") != SECRET_KEY:
         return Redirect("/")
 
     return Titled(
+        "Quality Inventory Home",
         Div(
             H1("Quality Inventory", cls="mb-4", style="width: 97%; text-align:center;"),
 
@@ -162,7 +167,6 @@ def home(req):
         )
     )
 
-# DONE
 # Form to add new item into inventory
 @rt("/add_item", methods=["GET", "POST"])
 def add_item(values: dict | None = None,
@@ -178,12 +182,13 @@ def add_item(values: dict | None = None,
     # If no POST data → render form
     if barcode is None and item_number is None:
         return Titled(
+            "Add New Item",
             Div(
                 H2("Add New Item", cls="mb-4", style="width: 105%; text-align:center;"),
                 Div(
                     P(error_message, style="width: 105%; color:red; margin-bottom:15px;"),
                     style="text-align:center;"
-                ) if error_message else Div(),
+                ) if error_message else Div(), # Display error message if any
                 Form(
                     Div(Label("Barcode", style=LABEL_STYLE),
                         Input(type="text", name="barcode", required=True,
@@ -232,7 +237,7 @@ def add_item(values: dict | None = None,
             )
         )
 
-    # Otherwise → POST submission
+    # Get user input values
     values = {
         "barcode": barcode or "",
         "item_number": item_number or "",
@@ -243,6 +248,7 @@ def add_item(values: dict | None = None,
         "item_type": item_type or ""
     }
 
+    # Check user input for errors
     errors = []
     if len(values["barcode"]) != 6:
         errors.append("Barcode must be exactly 6 characters.")
@@ -299,7 +305,6 @@ def add_item(values: dict | None = None,
 
     return Redirect("/home")
 
-# DONE
 # Form to remove item from inventory
 @rt("/remove_item", methods=["GET", "POST"])
 def remove_item(
@@ -309,7 +314,7 @@ def remove_item(
 ):
     record = None
 
-    # If barcode was submitted (POST)
+    # If barcode was submitted check if it is valid
     if barcode:
         response = SUPABASE.table("barcodes").select("*").eq("barcode", barcode).execute()
 
@@ -323,7 +328,7 @@ def remove_item(
                 error_message = "This barcode has already been removed."
                 record = None
 
-    # If user clicked REMOVE button
+    # If user clicked REMOVE button remove the item
     if error_message == "DO_REMOVE":
         if not employee:
             error_message = "Employee is required before removing an item."
@@ -341,20 +346,20 @@ def remove_item(
             "employee": record.get("employee")
         }
 
+        # Add the remove transaction and mark barcode as removed
         SUPABASE.table("transactions").insert(data).execute()
         SUPABASE.table("barcodes").update({"remove": 1}).eq("barcode", record.get("barcode")).execute()
         return Redirect("/home")
 
     # Render page
     return Titled(
+        "Remove Item",
         Div(
             H2("Remove Item", style="text-align:center; margin-bottom:20px;"),
-
-            # Error message
             Div(
                 P(error_message, style="color:red; font-size:18px; margin-bottom:15px;"),
                 style="text-align:center;"
-            ) if error_message and error_message != "DO_REMOVE" else Div(),
+            ) if error_message and error_message != "DO_REMOVE" else Div(), # Display error message if any
 
             # Barcode input form
             Form(
@@ -369,7 +374,7 @@ def remove_item(
                 style="margin-bottom:30px;"
             ),
 
-            # If valid record found → Show info + Remove button
+            # If valid record found → Show info
             Div(
                 *( 
                     [
@@ -406,7 +411,7 @@ def remove_item(
                     ] if record else []
                 ),
 
-                # Buttons
+                # Bottom Buttons
                 Div(
                     A("Back", href="/home", style=BACK_BUTTON_STYLE),
                     
@@ -427,7 +432,6 @@ def remove_item(
         )
     )
 
-# DONE
 # Form to view, edit, and filter transactions
 @rt("/transactions", methods=["GET", "POST"])
 def transactions(
@@ -444,7 +448,7 @@ def transactions(
     # Track input errors
     input_errors = {}
 
-    # Read Supabase table
+    # Read Supabase table and reformat
     response = SUPABASE.table("transactions").select("*").execute()
     df = pd.DataFrame(response.data)
     df = df[["trans_id", "barcode", "item_number", "description", "lot_number", "exp_date", "typ", "add_remove", "trans_date", "employee"]]
@@ -548,7 +552,9 @@ def transactions(
         method="POST"
     )
 
+    # Render page
     return Titled(
+        "Transactions",
         Div(
             H2("Transactions", style="text-align:center; margin-bottom:20px;"),
             filter_row,
@@ -572,7 +578,6 @@ def transactions(
         )
     )
 
-# DONE
 # Form to edit existing transaction
 @rt("/edit_transaction", methods=["GET", "POST"])
 def edit_transaction(
@@ -589,6 +594,7 @@ def edit_transaction(
     error_message: str | None = None,
     values: dict | None = None
 ):  
+    # If DELETE button clicked, delete the record
     if delete == "DO_DELETE":
         SUPABASE.table("transactions").delete().eq("trans_id", trans_id).execute()
         return Redirect("/transactions")
@@ -602,7 +608,7 @@ def edit_transaction(
 
     # If POST, update the record
     if barcode or item_number or description or lot_number or exp_date or item_type or employee:
-        # Use the provided values if present, otherwise fallback to the current record
+        # Use the provided values if present, otherwise fallback to None
         new_values = {
             "barcode": barcode or None,
             "item_number": item_number or None,
@@ -614,28 +620,28 @@ def edit_transaction(
             "employee": employee or None
         }
 
-        # Optional: add validation here
+        # User input validation
         errors = []
-        if new_values["barcode"] is not None and len(new_values["barcode"]) != 6:
+        if new_values["barcode"] and len(new_values["barcode"]) != 6:
             errors.append("Barcode must be exactly 6 characters.")
-        if new_values["item_number"] is not None and len(new_values["item_number"]) > 50:
+        if new_values["item_number"] and len(new_values["item_number"]) > 50:
             errors.append("Item # cannot exceed 50 characters.")
-        if new_values["description"] is not None and len(new_values["description"]) > 100:
+        if new_values["description"] and len(new_values["description"]) > 100:
             errors.append("Description cannot exceed 100 characters.")
-        if new_values["lot_number"] is not None and len(new_values["lot_number"]) > 50:
+        if new_values["lot_number"] and len(new_values["lot_number"]) > 50:
             errors.append("Lot # cannot exceed 50 characters.")
-        if new_values["add_remove"] is not None and len(new_values["add_remove"]) > 50:
+        if new_values["add_remove"] and len(new_values["add_remove"]) > 50:
             errors.append("Add/Remove cannot exceed 50 characters.")
-        if new_values["employee"] is not None and len(new_values["employee"]) > 50:
+        if new_values["employee"] and len(new_values["employee"]) > 50:
             errors.append("Employee cannot exceed 50 characters.")
         if errors:
             return edit_transaction(trans_id, error_message=errors[0], values=new_values)
 
-        # Update Supabase
+        # Update Supabase with new values
         SUPABASE.table("transactions").update(new_values).eq("trans_id", trans_id).execute()
         return Redirect("/transactions")
 
-    # If GET, display the form with placeholders
+    # If GET, render the page
     return Titled(
         Div(
             H2(f"Edit Transaction: {trans_id}", cls="mb-4", style="width: 105%; text-align:center;"),
@@ -645,7 +651,6 @@ def edit_transaction(
             ) if error_message else Div(),
 
             Form(
-                # Barcode
                 Div(
                     Label("Barcode", style=LABEL_STYLE),
                     Input(
@@ -656,7 +661,6 @@ def edit_transaction(
                     ),
                     style="display:flex; align-items:center; margin-bottom: 15px;"
                 ),
-                # Item #
                 Div(
                     Label("Item #", style=LABEL_STYLE),
                     Input(
@@ -667,7 +671,6 @@ def edit_transaction(
                     ),
                     style="display:flex; align-items:center; margin-bottom: 15px;"
                 ),
-                # Description
                 Div(
                     Label("Description", style=LABEL_STYLE),
                     Input(
@@ -678,7 +681,6 @@ def edit_transaction(
                     ),
                     style="display:flex; align-items:center; margin-bottom: 15px;"
                 ),
-                # Lot #
                 Div(
                     Label("Lot #", style=LABEL_STYLE),
                     Input(
@@ -689,7 +691,6 @@ def edit_transaction(
                     ),
                     style="display:flex; align-items:center; margin-bottom: 15px;"
                 ),
-                # Exp Date
                 Div(
                     Label("Exp Date", style=LABEL_STYLE),
                     Input(
@@ -700,7 +701,6 @@ def edit_transaction(
                     ),
                     style="display:flex; align-items:center; margin-bottom: 15px;"
                 ),
-                # Type
                 Div(
                     Label("Type", style=LABEL_STYLE),
                     Select(
@@ -715,7 +715,6 @@ def edit_transaction(
                     ),
                     style="display:flex; align-items:center; margin-bottom: 15px;"
                 ),
-                # Add/Remove
                 Div(
                     Label("Add/Remove", style=LABEL_STYLE),
                     Select(
@@ -730,7 +729,6 @@ def edit_transaction(
                     ),
                     style="display:flex; align-items:center; margin-bottom: 15px;"
                 ),
-                # Employee
                 Div(
                     Label("Employee", style=LABEL_STYLE),
                     Input(
@@ -756,7 +754,6 @@ def edit_transaction(
         )
     )
 
-# DONE
 # Form to view and filter barcodes
 @rt("/barcodes", methods=["GET", "POST"])
 def barcodes(
@@ -768,7 +765,7 @@ def barcodes(
     item_type: str | None = None
 ):
 
-    # Read Supabase table
+    # Read Supabase table and reformat
     response = SUPABASE.table("barcodes").select("*").execute()
     df = pd.DataFrame(response.data)
     df = df[["barcode", "item_number", "description", "lot_number", "exp_date", "typ", "remove"]]
@@ -836,7 +833,9 @@ def barcodes(
         method="POST"
     )
 
+    # Render page
     return Titled(
+        "Barcodes",
         Div(
             H2("Barcodes", style="text-align:center; margin-bottom:20px;"),
             filter_row,
@@ -860,7 +859,6 @@ def barcodes(
         )
     )
 
-# DONE
 # Form to edit existing barcode
 @rt("/edit_barcode", methods=["GET", "POST"])
 def edit_barcode(
@@ -875,18 +873,19 @@ def edit_barcode(
     error_message: str | None = None,
     values: dict | None = None
 ):  
+    # If DELETE button clicked, delete the record
     if delete == "DO_DELETE":
         SUPABASE.table("barcodes").delete().eq("barcode", barcode).execute()
         return Redirect("/barcodes")
 
-    # Fetch record from Supabase
+    # Get record from Supabase
     response = SUPABASE.table("barcodes").select("*").eq("barcode", barcode).execute()
     if not response.data:
         return Titled(P("Record not found.", style="color:red; text-align:center;"))
 
     record = response.data[0]
 
-    # If POST, update the record
+    # If POST, update the record with user input
     if item_number or description or lot_number or exp_date or item_type or remove:
         # Use the provided values if present, otherwise fallback to the current record
         new_values = {
@@ -898,7 +897,7 @@ def edit_barcode(
             "remove": remove or None
         }
 
-        # Optional: add validation here
+        # Validate user input
         errors = []
         if new_values["item_number"] is not None and len(new_values["item_number"]) > 50:
             errors.append("Item # cannot exceed 50 characters.")
@@ -915,7 +914,7 @@ def edit_barcode(
         SUPABASE.table("barcodes").update(new_values).eq("barcode", barcode).execute()
         return Redirect("/barcodes")
 
-    # If GET, display the form with placeholders
+    # If GET, render the page
     return Titled(
         Div(
             H2(f"Edit Barcode: {barcode}", cls="mb-4", style="width: 105%; text-align:center;"),
@@ -925,7 +924,6 @@ def edit_barcode(
             ) if error_message else Div(),
 
             Form(
-                # Item #
                 Div(
                     Label("Item #", style=LABEL_STYLE),
                     Input(
@@ -936,7 +934,6 @@ def edit_barcode(
                     ),
                     style="display:flex; align-items:center; margin-bottom: 15px;"
                 ),
-                # Description
                 Div(
                     Label("Description", style=LABEL_STYLE),
                     Input(
@@ -947,7 +944,6 @@ def edit_barcode(
                     ),
                     style="display:flex; align-items:center; margin-bottom: 15px;"
                 ),
-                # Lot #
                 Div(
                     Label("Lot #", style=LABEL_STYLE),
                     Input(
@@ -958,7 +954,6 @@ def edit_barcode(
                     ),
                     style="display:flex; align-items:center; margin-bottom: 15px;"
                 ),
-                # Exp Date
                 Div(
                     Label("Exp Date", style=LABEL_STYLE),
                     Input(
@@ -969,7 +964,6 @@ def edit_barcode(
                     ),
                     style="display:flex; align-items:center; margin-bottom: 15px;"
                 ),
-                # Type
                 Div(
                     Label("Type", style=LABEL_STYLE),
                     Select(
@@ -984,7 +978,6 @@ def edit_barcode(
                     ),
                     style="display:flex; align-items:center; margin-bottom: 15px;"
                 ),
-                # Add/Remove
                 Div(
                     Label("Remove", style=LABEL_STYLE),
                     Select(
@@ -1014,7 +1007,6 @@ def edit_barcode(
         )
     )
 
-# DONE
 # Form to view current inventory with filters
 @rt("/inventory")
 def inventory(
@@ -1023,11 +1015,14 @@ def inventory(
     exp_date: str | None = None,
     item_type: str | None = None
 ):
+    # Read Supabase table
     response = SUPABASE.table("barcodes").select("*").execute()
     df = pd.DataFrame(response.data)
 
+    # Render message if no inventory
     if df.empty:
         return Titled(
+            "Inventory",
             Div(
                 H2("Inventory", style="text-align:center; margin-bottom:20px;"),
                 P("No inventory found.", style="text-align:center;"),
@@ -1036,6 +1031,7 @@ def inventory(
             )
         )
 
+    # Calculate current inventory
     df = df[df["remove"] == 0]
 
     grouped = (
@@ -1044,6 +1040,7 @@ def inventory(
           .reset_index()
     )
 
+    # Update inventory table in Supabase
     SUPABASE.table("inventory").delete().neq("id", 0).execute()
     SUPABASE.table("inventory").insert(grouped.to_dict(orient="records")).execute()
 
@@ -1094,7 +1091,9 @@ def inventory(
         method="POST"
     )
 
+    # Render page
     return Titled(
+        "Inventory",
         Div(
             H2("Inventory", style="text-align:center; margin-bottom:20px;"),
             filter_row,
@@ -1118,11 +1117,10 @@ def inventory(
         )
     )
 
-# DONE
 # Export data to Excel
 @rt("/export_excel")
 def export_excel():
-    # Fetch data
+    # Fetch data from Supabase and reformat
     df_transactions = pd.DataFrame(SUPABASE.table("transactions").select("*").execute().data)
     df_transactions = df_transactions[["trans_id", "barcode", "item_number", "description", "lot_number", "exp_date", "typ", "add_remove", "trans_date", "employee"]]
     df_transactions.sort_values(by="trans_id", ascending=False, inplace=True)
@@ -1130,7 +1128,7 @@ def export_excel():
     df_barcodes = df_barcodes[["barcode", "item_number", "description", "lot_number", "exp_date", "typ", "remove"]]
     df_barcodes.sort_values(by="barcode", ascending=False, inplace=True)
 
-    # Inventory sheet
+    # Create inventory sheet
     if not df_barcodes.empty:
         df_inventory = df_barcodes[df_barcodes["remove"] == 0].groupby(
             ["item_number", "lot_number", "exp_date", "typ"], as_index=False
@@ -1138,7 +1136,7 @@ def export_excel():
     else:
         df_inventory = pd.DataFrame()
 
-    # Write Excel in memory
+    # Write Excel file
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df_transactions.to_excel(writer, sheet_name="Transactions", index=False)
