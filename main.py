@@ -408,7 +408,7 @@ def remove_item(
 
                 # Buttons
                 Div(
-                    A("Back", href="/", style=BACK_BUTTON_STYLE),
+                    A("Back", href="/home", style=BACK_BUTTON_STYLE),
                     
                     # Remove button posts a special flag "DO_REMOVE"
                     Form(
@@ -1154,6 +1154,5 @@ def export_excel():
             "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         }
     )
-
 
 serve()
