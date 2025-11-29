@@ -13,8 +13,6 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 PASSWORD = os.getenv("PASSWORD")
 SECRET_KEY = os.getenv("SECRET_KEY")
 
-SUPABASE = create_client(SUPABASE_URL, SUPABASE_KEY)
-
 BUTTON_STYLE = (
     "display: block; "
     "width: 220px; "
@@ -62,18 +60,10 @@ TABLE_STYLES = Style("""
 }
 """)
 
+SUPABASE = create_client(SUPABASE_URL, SUPABASE_KEY)
 app, rt = fast_app(hdrs=[TABLE_STYLES])
 
-def get_trans_data():
-    response = SUPABASE.table("transactions").select("*").execute()
-    df = pd.DataFrame(response.data)
-    return df
-
-def get_bar_data():
-    response = SUPABASE .table("barcodes").select("*").execute()
-    df = pd.DataFrame(response.data)
-    return df
-
+# Convert DataFrame to HTML table with clickable links
 def df_to_html_table(df, link_trans_id=False, link_barcode=False):
     if df.empty:
         return P("No data found.")
@@ -130,8 +120,7 @@ def login(password: str | None = None):
         else:
             error_message = "Incorrect password"
 
-    return Titled(
-        "Login to Quality Inventory",
+    return Title("Login to Quality Inventory"), Titled(
         Div(
             H2("Enter Password"),
             Form(
@@ -150,39 +139,42 @@ def home(req):
     if req.cookies.get("session") != SECRET_KEY:
         return Redirect("/")
 
-    return Titled(
-        Title("Quality Inventory Home"),
+    return Title("Quality Inventory Home"), Titled(
+    Div(
+        H1("Quality Inventory", cls="mb-4", style="width: 97%; text-align:center;"),
         Div(
-            H1("Quality Inventory", cls="mb-4", style="width: 97%; text-align:center;"),
-
-            Div(
-                A("Add New Item", href="/add_item", style=BUTTON_STYLE),
-                A("Remove Item", href="/remove_item", style=BUTTON_STYLE),
-                A("Transactions", href="/transactions", style=BUTTON_STYLE),
-                A("Barcodes", href="/barcodes", style=BUTTON_STYLE),
-                A("Inventory", href="/inventory", style=BUTTON_STYLE),
-                A("Export Data To Excel", href="/export_excel", target="_blank", style=BUTTON_STYLE),
-                style="max-width: 260px; margin: auto; margin-top: 40px;"
-            )
+            A("Add New Item", href="/add_item", style=BUTTON_STYLE),
+            A("Remove Item", href="/remove_item", style=BUTTON_STYLE),
+            A("Transactions", href="/transactions", style=BUTTON_STYLE),
+            A("Barcodes", href="/barcodes", style=BUTTON_STYLE),
+            A("Inventory", href="/inventory", style=BUTTON_STYLE),
+            A("Export Data To Excel", href="/export_excel", target="_blank", style=BUTTON_STYLE),
+            style="max-width: 260px; margin: auto; margin-top: 40px;"
         )
     )
+)
 
 # Form to add new item into inventory
 @rt("/add_item", methods=["GET", "POST"])
-def add_item(values: dict | None = None,
-             error_message: str | None = None,
-             barcode: str | None = None,
-             item_number: str | None = None,
-             description: str | None = None,
-             lot_number: str | None = None,
-             exp_date: str | None = None,
-             employee: str | None = None,
-             item_type: str | None = None):
+def add_item(
+            req,
+            values: dict | None = None,
+            error_message: str | None = None,
+            barcode: str | None = None,
+            item_number: str | None = None,
+            description: str | None = None,
+            lot_number: str | None = None,
+            exp_date: str | None = None,
+            employee: str | None = None,
+            item_type: str | None = None):
+
+    # Check if the user is logged in by verifying the session cookie
+    if req.cookies.get("session") != SECRET_KEY:
+        return Redirect("/")
 
     # If no POST data → render form
     if barcode is None and item_number is None:
-        return Titled(
-            Title("Add New Item"),
+        return Title("Add New Item"), Titled(
             Div(
                 H2("Add New Item", cls="mb-4", style="width: 105%; text-align:center;"),
                 Div(
@@ -308,11 +300,16 @@ def add_item(values: dict | None = None,
 # Form to remove item from inventory
 @rt("/remove_item", methods=["GET", "POST"])
 def remove_item(
+    req,
     barcode: str | None = None,
     employee: str | None = None,
     error_message: str | None = None
 ):
     record = None
+
+    # Check if the user is logged in by verifying the session cookie
+    if req.cookies.get("session") != SECRET_KEY:
+        return Redirect("/")
 
     # If barcode was submitted check if it is valid
     if barcode:
@@ -352,8 +349,7 @@ def remove_item(
         return Redirect("/home")
 
     # Render page
-    return Titled(
-        Title("Remove Item"),
+    return Title("Remove Item"), Titled(
         Div(
             H2("Remove Item", style="text-align:center; margin-bottom:20px;"),
             Div(
@@ -435,6 +431,7 @@ def remove_item(
 # Form to view, edit, and filter transactions
 @rt("/transactions", methods=["GET", "POST"])
 def transactions(
+    req,
     barcode: str | None = None,
     item_number: str | None = None,
     description: str | None = None,
@@ -445,6 +442,11 @@ def transactions(
     trans_date_end: str | None = None,
     employee: str | None = None
 ):
+    
+    # Check if the user is logged in by verifying the session cookie
+    if req.cookies.get("session") != SECRET_KEY:
+        return Redirect("/")
+
     # Track input errors
     input_errors = {}
 
@@ -553,8 +555,7 @@ def transactions(
     )
 
     # Render page
-    return Titled(
-        Title("Transactions"),
+    return Title("Transactions"), Titled(
         Div(
             H2("Transactions", style="text-align:center; margin-bottom:20px;"),
             filter_row,
@@ -581,6 +582,7 @@ def transactions(
 # Form to edit existing transaction
 @rt("/edit_transaction", methods=["GET", "POST"])
 def edit_transaction(
+    req,
     trans_id: str,
     barcode: str | None = None,
     item_number: str | None = None,
@@ -594,6 +596,12 @@ def edit_transaction(
     error_message: str | None = None,
     values: dict | None = None
 ):  
+    
+    # Check if the user is logged in by verifying the session cookie
+    if req.cookies.get("session") != SECRET_KEY:
+        return Redirect("/")
+
+
     # If DELETE button clicked, delete the record
     if delete == "DO_DELETE":
         SUPABASE.table("transactions").delete().eq("trans_id", trans_id).execute()
@@ -642,8 +650,7 @@ def edit_transaction(
         return Redirect("/transactions")
 
     # If GET, render the page
-    return Titled(
-        Title("Edit Transaction"),
+    return Title("Edit Transaction"), Titled(
         Div(
             H2(f"Edit Transaction: {trans_id}", cls="mb-4", style="width: 105%; text-align:center;"),
             Div(
@@ -758,6 +765,7 @@ def edit_transaction(
 # Form to view and filter barcodes
 @rt("/barcodes", methods=["GET", "POST"])
 def barcodes(
+    req,
     barcode: str | None = None,
     item_number: str | None = None,
     description: str | None = None,
@@ -765,6 +773,10 @@ def barcodes(
     exp_date: str | None = None,
     item_type: str | None = None
 ):
+    
+    # Check if the user is logged in by verifying the session cookie
+    if req.cookies.get("session") != SECRET_KEY:
+        return Redirect("/")
 
     # Read Supabase table and reformat
     response = SUPABASE.table("barcodes").select("*").execute()
@@ -835,8 +847,7 @@ def barcodes(
     )
 
     # Render page
-    return Titled(
-        Title("Barcodes"),
+    return Title("Barcodes"), Titled(
         Div(
             H2("Barcodes", style="text-align:center; margin-bottom:20px;"),
             filter_row,
@@ -863,6 +874,7 @@ def barcodes(
 # Form to edit existing barcode
 @rt("/edit_barcode", methods=["GET", "POST"])
 def edit_barcode(
+    req,
     barcode: str | None = None,
     item_number: str | None = None,
     description: str | None = None,
@@ -874,6 +886,11 @@ def edit_barcode(
     error_message: str | None = None,
     values: dict | None = None
 ):  
+    
+    # Check if the user is logged in by verifying the session cookie
+    if req.cookies.get("session") != SECRET_KEY:
+        return Redirect("/")
+
     # If DELETE button clicked, delete the record
     if delete == "DO_DELETE":
         SUPABASE.table("barcodes").delete().eq("barcode", barcode).execute()
@@ -916,8 +933,7 @@ def edit_barcode(
         return Redirect("/barcodes")
 
     # If GET, render the page
-    return Titled(
-        Title("Edit Barcode"),
+    return Title("Edit Barcode"), Titled(
         Div(
             H2(f"Edit Barcode: {barcode}", cls="mb-4", style="width: 105%; text-align:center;"),
             Div(
@@ -1012,19 +1028,24 @@ def edit_barcode(
 # Form to view current inventory with filters
 @rt("/inventory")
 def inventory(
+    req,
     item_number: str | None = None,
     lot_number: str | None = None,
     exp_date: str | None = None,
     item_type: str | None = None
 ):
+    
+    # Check if the user is logged in by verifying the session cookie
+    if req.cookies.get("session") != SECRET_KEY:
+        return Redirect("/")
+
     # Read Supabase table
     response = SUPABASE.table("barcodes").select("*").execute()
     df = pd.DataFrame(response.data)
 
     # Render message if no inventory
     if df.empty:
-        return Titled(
-            "Inventory",
+        return Title("Inventory"), Titled(
             Div(
                 H2("Inventory", style="text-align:center; margin-bottom:20px;"),
                 P("No inventory found.", style="text-align:center;"),
@@ -1094,8 +1115,7 @@ def inventory(
     )
 
     # Render page
-    return Titled(
-        Title("Inventory"),
+    return Title("Inventory"), Titled(
         Div(
             H2("Inventory", style="text-align:center; margin-bottom:20px;"),
             filter_row,
@@ -1121,7 +1141,11 @@ def inventory(
 
 # Export data to Excel
 @rt("/export_excel")
-def export_excel():
+def export_excel(req):
+    # Check if the user is logged in by verifying the session cookie
+    if req.cookies.get("session") != SECRET_KEY:
+        return Redirect("/")
+
     # Fetch data from Supabase and reformat
     df_transactions = pd.DataFrame(SUPABASE.table("transactions").select("*").execute().data)
     df_transactions = df_transactions[["trans_id", "barcode", "item_number", "description", "lot_number", "exp_date", "typ", "add_remove", "trans_date", "employee"]]
