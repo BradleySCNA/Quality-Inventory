@@ -269,7 +269,7 @@ def add_item(
 
     if errors:
         # Re-render form with error
-        return add_item(values=values, error_message=errors[0])
+        return add_item(req=req, values=values, error_message=errors[0])
 
     # Insert into Supabase
     data = {
@@ -329,7 +329,7 @@ def remove_item(
     if error_message == "DO_REMOVE":
         if not employee:
             error_message = "Employee is required before removing an item."
-            return remove_item(barcode=barcode, error_message=error_message)
+            return remove_item(req=req, barcode=barcode, error_message=error_message)
     
         data = {
             "barcode": record.get("barcode"),
@@ -643,7 +643,7 @@ def edit_transaction(
         if new_values["employee"] and len(new_values["employee"]) > 50:
             errors.append("Employee cannot exceed 50 characters.")
         if errors:
-            return edit_transaction(trans_id, error_message=errors[0], values=new_values)
+            return edit_transaction(req=req, trans_id=trans_id, error_message=errors[0], values=new_values)
 
         # Update Supabase with new values
         SUPABASE.table("transactions").update(new_values).eq("trans_id", trans_id).execute()
@@ -926,7 +926,7 @@ def edit_barcode(
         if new_values["remove"] is not None and len(new_values["remove"]) > 50:
             errors.append("Remove cannot exceed 50 characters.")
         if errors:
-            return edit_barcode(barcode, error_message=errors[0], values=new_values)
+            return edit_barcode(req=req, barcode=barcode, error_message=errors[0], values=new_values)
 
         # Update Supabase
         SUPABASE.table("barcodes").update(new_values).eq("barcode", barcode).execute()
