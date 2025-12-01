@@ -166,7 +166,8 @@ def add_item(
             lot_number: str | None = None,
             exp_date: str | None = None,
             employee: str | None = None,
-            item_type: str | None = None):
+            item_type: str | None = None,
+            quantity: str | None = None):
 
     # Check if the user is logged in by verifying the session cookie
     if req.cookies.get("session") != SECRET_KEY:
@@ -211,8 +212,13 @@ def add_item(
                         Select(
                             *[Option(text, value=text,
                                      selected=(values and values.get("item_type") == text))
-                              for text in ["Vendor Damage", "Damage", "Expired", "Short Dated"]],
+                              for text in ["Vendor Damage", "Damage", "Expired", "Short Dated", "Return"]],
                             name="item_type", required=True, style=INPUT_STYLE),
+                        style="display:flex; align-items:center; margin-bottom: 15px;"),
+                    Div(Label("Quantity", style=LABEL_STYLE),
+                        Input(type="number", name="quantity", required=True, step="1",
+                              value=values.get("quantity", "") if values else "",
+                              style=INPUT_STYLE),
                         style="display:flex; align-items:center; margin-bottom: 15px;"),
                     Div(Label("Employee", style=LABEL_STYLE),
                         Input(type="text", name="employee", required=True,
@@ -237,7 +243,8 @@ def add_item(
         "lot_number": lot_number or "",
         "exp_date": exp_date or "",
         "employee": employee or "",
-        "item_type": item_type or ""
+        "item_type": item_type or "",
+        "quantity": quantity or "",
     }
 
     # Check user input for errors
@@ -254,6 +261,8 @@ def add_item(
         errors.append("Type cannot exceed 50 characters.")
     if len(values["employee"]) > 50:
         errors.append("Employee cannot exceed 50 characters.")
+    if int(values["quantity"] <= 0):
+        errors.append("Quantity must be greater than 0.")
 
     response = SUPABASE.table("barcodes").select("barcode").eq("barcode", values["barcode"]).execute()
     if response.data:
@@ -276,6 +285,7 @@ def add_item(
         "typ": values["item_type"],
         "add_remove": "Add",
         "trans_date": str(pd.Timestamp.now()),
+        "quantity" : values["quantity"],
         "employee": values["employee"]
     }
     bc_data = {
@@ -284,6 +294,7 @@ def add_item(
         "description": values["description"],
         "lot_number": values["lot_number"],
         "typ": values["item_type"],
+        "quantity" : values["quantity"],
         "exp_date": values["exp_date"]
     }
 
@@ -337,6 +348,7 @@ def remove_item(
             "exp_date": record.get("exp_date"),
             "typ": record.get("typ"),
             "add_remove": "Remove",
+            "quantity": record.get("quantity"),
             "trans_date": str(pd.Timestamp.now()),
             "employee": record.get("employee")
         }
@@ -398,6 +410,11 @@ def remove_item(
                             style="display:flex; margin-bottom:10px;"
                         ),
                         Div(
+                            Label("Quantity", style="width: 35%; font-weight:bold; align-items:left;"),
+                            P(record.get("quantity"), style="width:40%; font-weight:normal;"),
+                            style="display:flex; margin-bottom:10px;"
+                        ),
+                        Div(
                             Label("Employee", style="width: 35%; font-weight:bold; align-items:left;"),
                             Input(type="text", name="employee", style="width:40%; font-weight:normal;", required=True),
                             style="display:flex; margin-bottom:10px;"
@@ -436,6 +453,7 @@ def transactions(
     lot_number: str | None = None,
     exp_date: str | None = None,
     item_type: str | None = None,
+    quantity: str | None = None,
     trans_date_begin: str | None = None,
     trans_date_end: str | None = None,
     employee: str | None = None
@@ -451,8 +469,8 @@ def transactions(
     # Read Supabase table and reformat
     response = SUPABASE.table("transactions").select("*").execute()
     df = pd.DataFrame(response.data)
-    df = df[["trans_id", "barcode", "item_number", "description", "lot_number", "exp_date", "typ", "add_remove", "trans_date", "employee"]]
-    df.columns = ["Trans ID", "Barcode", "Item #", "Description", "Lot #", "Exp Date", "Type", "Add/Remove", "Trans Date", "Employee"]
+    df = df[["trans_id", "barcode", "item_number", "description", "lot_number", "exp_date", "typ", "add_remove", "quantity", "trans_date", "employee"]]
+    df.columns = ["Trans ID", "Barcode", "Item #", "Description", "Lot #", "Exp Date", "Type", "Add/Remove", "Quantity", "Trans Date", "Employee"]
     df["Trans Date"] = pd.to_datetime(df["Trans Date"]).dt.floor("s")
     df.sort_values(by="Trans ID", ascending=False, inplace=True)
 
@@ -589,6 +607,7 @@ def edit_transaction(
     exp_date: str | None = None,
     add_remove: str | None = None,
     item_type: str | None = None,
+    quantity: str | None = None,
     employee: str | None = None,
     delete: str | None = None,
     error_message: str | None = None,
@@ -622,6 +641,7 @@ def edit_transaction(
             "lot_number": lot_number if lot_number not in (None, "", "nan") else record.get("lot_number"),
             "exp_date": exp_date if exp_date not in (None, "", "nan") else record.get("exp_date"),
             "typ": item_type if item_type not in (None, "", "nan") else record.get("typ"),
+            "quantity" : int(quantity) if quantity not in (None, "", "nan") else int(record.get("quantity")),
             "add_remove": add_remove if add_remove not in (None, "", "nan") else record.get("add_remove"),
             "employee": employee if employee not in (None, "", "nan") else record.get("employee")
         }
@@ -640,6 +660,8 @@ def edit_transaction(
             errors.append("Add/Remove cannot exceed 50 characters.")
         if new_values["employee"] and len(new_values["employee"]) > 50:
             errors.append("Employee cannot exceed 50 characters.")
+        if new_values["quantity"] and int(new_values["quantity"]) <= 0:
+            errors.append("Quantity must be greater than 0.")
         if errors:
             return edit_transaction(req=req, trans_id=trans_id, error_message=errors[0], values=new_values)
 
@@ -713,7 +735,7 @@ def edit_transaction(
                         *[
                             Option(text, value=text,
                                 selected=((values.get("item_type", "") if values else (item_type or record.get("typ"))) == text))
-                            for text in ["Vendor Damage", "Damage", "Expired", "Short Dated"]
+                            for text in ["Vendor Damage", "Damage", "Expired", "Short Dated", "Return"]
                         ],
                         name="item_type",
                         required=True,
@@ -731,6 +753,16 @@ def edit_transaction(
                         ],
                         name="add_remove",
                         required=True,
+                        style=INPUT_STYLE
+                    ),
+                    style="display:flex; align-items:center; margin-bottom: 15px;"
+                ),
+                Div(
+                    Label("Quantity", style=LABEL_STYLE),
+                    Input(
+                        type="number", name="quantity", step="1",
+                        value=values.get("quantity") if values else (quantity or 0),
+                        placeholder=record.get("quantity"),
                         style=INPUT_STYLE
                     ),
                     style="display:flex; align-items:center; margin-bottom: 15px;"
@@ -779,8 +811,8 @@ def barcodes(
     # Read Supabase table and reformat
     response = SUPABASE.table("barcodes").select("*").execute()
     df = pd.DataFrame(response.data)
-    df = df[["barcode", "item_number", "description", "lot_number", "exp_date", "typ", "remove"]]
-    df.columns = ["Barcode", "Item #", "Description", "Lot #", "Exp Date", "Type", "Remove"]
+    df = df[["barcode", "item_number", "description", "lot_number", "exp_date", "typ", "quantity", "remove"]]
+    df.columns = ["Barcode", "Item #", "Description", "Lot #", "Exp Date", "Type", "Quantity", "Remove"]
     df.sort_values(by="Barcode", ascending=False, inplace=True)
 
     # Apply filters
@@ -880,6 +912,7 @@ def edit_barcode(
     exp_date: str | None = None,
     remove: str | None = None,
     item_type: str | None = None,
+    quantity: str | None = None,
     delete: str | None = None,
     error_message: str | None = None,
     values: dict | None = None
@@ -910,7 +943,8 @@ def edit_barcode(
             "lot_number": lot_number if lot_number not in (None, "", "nan") else record.get("lot_number"),
             "exp_date": exp_date if exp_date not in (None, "", "nan") else record.get("exp_date"),
             "typ": item_type if item_type not in (None, "", "nan") else record.get("typ"),
-            "remove": remove if remove not in (None, "", "nan") else record.get("remove")
+            "remove": remove if remove not in (None, "", "nan") else record.get("remove"),
+            "quantity": int(quantity) if quantity not in (None, "", "nan") else int(record.get("quantity")),
         }
 
         # Validate user input
@@ -923,6 +957,8 @@ def edit_barcode(
             errors.append("Lot # cannot exceed 50 characters.")
         if new_values["remove"] is not None and len(new_values["remove"]) > 50:
             errors.append("Remove cannot exceed 50 characters.")
+        if int(new_values["quantity"]) is not None and int(new_values["quantity"]) <= 0:
+            errors.append("Quantity must be greater than 0.")
         if errors:
             return edit_barcode(req=req, barcode=barcode, error_message=errors[0], values=new_values)
 
@@ -986,7 +1022,7 @@ def edit_barcode(
                         *[
                             Option(text, value=text,
                                 selected=((values.get("item_type", "") if values else (item_type or record.get("typ"))) == text))
-                            for text in ["Vendor Damage", "Damage", "Expired", "Short Dated"]
+                            for text in ["Vendor Damage", "Damage", "Expired", "Short Dated", "Return"]
                         ],
                         name="item_type",
                         required=True,
@@ -1004,6 +1040,16 @@ def edit_barcode(
                         ],
                         name="remove",
                         required=True,
+                        style=INPUT_STYLE
+                    ),
+                    style="display:flex; align-items:center; margin-bottom: 15px;"
+                ),
+                Div(
+                    Label("Quantity", style=LABEL_STYLE),
+                    Input(
+                        type="number", name="quantity", step="1",
+                        value=values.get("quantity") if values else (quantity or 0),
+                        placeholder=record.get("quantity"),
                         style=INPUT_STYLE
                     ),
                     style="display:flex; align-items:center; margin-bottom: 15px;"
@@ -1055,14 +1101,40 @@ def inventory(
     # Calculate current inventory
     df = df[df["remove"] == 0]
 
+    # Group your data
     grouped = (
         df.groupby(["item_number", "lot_number", "exp_date", "typ"])
-          .agg(quantity=("barcode", "count"))
-          .reset_index()
+        .agg(quantity=("quantity", "sum"))
+        .reset_index()
     )
 
-    # Update inventory table in Supabase
-    SUPABASE.table("inventory").delete().neq("id", 0).execute()
+    # Delete all rows
+    SUPABASE.rpc("exec_sql", {
+        "sql": "DROP TABLE IF EXISTS inventory"
+    }).execute()
+
+    SUPABASE.rpc("exec_sql", {
+        "sql": """
+            CREATE TABLE public.inventory (
+                id SERIAL PRIMARY KEY,
+                item_number VARCHAR(20) DEFAULT '',
+                lot_number VARCHAR(20) DEFAULT '',
+                exp_date DATE DEFAULT CURRENT_DATE,
+                typ VARCHAR(20) DEFAULT '',
+                quantity INT DEFAULT 0
+            );
+        """
+    }).execute()
+
+    # Force PostgREST to reload schema
+    SUPABASE.rpc("exec_sql", {
+        "sql": "ALTER TABLE inventory OWNER TO postgres;"
+    }).execute()
+
+    # Give the API a moment to update
+    import time
+    time.sleep(2)
+
     SUPABASE.table("inventory").insert(grouped.to_dict(orient="records")).execute()
 
     grouped.columns = ["Item #", "Lot #", "Exp Date", "Type", "Quantity"]
