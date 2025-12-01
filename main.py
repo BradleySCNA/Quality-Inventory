@@ -183,7 +183,7 @@ def add_item(
                 ) if error_message else Div(), # Display error message if any
                 Form(
                     Div(Label("Barcode", style=LABEL_STYLE),
-                        Input(type="text", name="barcode", required=True,
+                        Input(type="number", name="barcode", required=True, step="1",
                               value=values.get("barcode", "") if values else "",
                               style=INPUT_STYLE),
                         style="display:flex; align-items:center; margin-bottom: 15px;"),
@@ -242,8 +242,8 @@ def add_item(
 
     # Check user input for errors
     errors = []
-    if len(values["barcode"]) != 6:
-        errors.append("Barcode must be exactly 6 characters.")
+    if int(values["barcode"]) < 100000 or int(values["barcode"]) > 999999:
+        errors.append("Barcode must be between 100000 and 999999.")
     if len(values["item_number"]) > 50:
         errors.append("Item # cannot exceed 50 characters.")
     if len(values["description"]) > 100:
@@ -254,11 +254,6 @@ def add_item(
         errors.append("Type cannot exceed 50 characters.")
     if len(values["employee"]) > 50:
         errors.append("Employee cannot exceed 50 characters.")
-
-    try:
-        values["barcode"] = int(values["barcode"])
-    except:
-        errors.append("Barcode must be numeric.")
 
     response = SUPABASE.table("barcodes").select("barcode").eq("barcode", values["barcode"]).execute()
     if response.data:
@@ -313,17 +308,20 @@ def remove_item(
 
     # If barcode was submitted check if it is valid
     if barcode:
-        response = SUPABASE.table("barcodes").select("*").eq("barcode", barcode).execute()
-
-        if not response.data:
-            error_message = "This barcode does not exist."
+        if int(barcode) < 100000 or int(barcode) > 999999:
+            error_message = "Barcode must be between 100000 and 999999."
         else:
-            record = response.data[0]
+            response = SUPABASE.table("barcodes").select("*").eq("barcode", barcode).execute()
 
-            # Already removed
-            if record.get("remove") == 1:
-                error_message = "This barcode has already been removed."
-                record = None
+            if not response.data:
+                error_message = "This barcode does not exist."
+            else:
+                record = response.data[0]
+
+                # Already removed
+                if record.get("remove") == 1:
+                    error_message = "This barcode has already been removed."
+                    record = None
 
     # If user clicked REMOVE button remove the item
     if error_message == "DO_REMOVE":
@@ -361,7 +359,7 @@ def remove_item(
             Form(
                 Div(
                     Label("Barcode", style="width: 12%; font-weight:bold; text-align:left;"),
-                    Input(type="text", name="barcode", placeholder="Enter Barcode",
+                    Input(type="number", name="barcode", placeholder="Enter Barcode", step="1",
                           value=barcode or "", style="width: 12%; padding:6px; margin-top:15px;"),
                     Button("Search", type="submit", style=SUBMIT_BUTTON_STYLE),
                     style="display:flex; align-items:center; gap:10px; justify-content:center;"
@@ -618,14 +616,14 @@ def edit_transaction(
     if barcode or item_number or description or lot_number or exp_date or item_type or employee:
         # Use the provided values if present, otherwise fallback to None
         new_values = {
-            "barcode": barcode or None,
-            "item_number": item_number or None,
-            "description": description or None,
-            "lot_number": lot_number or None,
-            "exp_date": exp_date or None,
-            "typ": item_type or None,
-            "add_remove": add_remove or None,
-            "employee": employee or None
+            "barcode": barcode if barcode not in (None, "", "nan") else record.get("barcode"),
+            "item_number": item_number if item_number not in (None, "", "nan") else record.get("item_number"),
+            "description": description if description not in (None, "", "nan") else record.get("description"),
+            "lot_number": lot_number if lot_number not in (None, "", "nan") else record.get("lot_number"),
+            "exp_date": exp_date if exp_date not in (None, "", "nan") else record.get("exp_date"),
+            "typ": item_type if item_type not in (None, "", "nan") else record.get("typ"),
+            "add_remove": add_remove if add_remove not in (None, "", "nan") else record.get("add_remove"),
+            "employee": employee if employee not in (None, "", "nan") else record.get("employee")
         }
 
         # User input validation
@@ -907,12 +905,12 @@ def edit_barcode(
     if item_number or description or lot_number or exp_date or item_type or remove:
         # Use the provided values if present, otherwise fallback to the current record
         new_values = {
-            "item_number": item_number or None,
-            "description": description or None,
-            "lot_number": lot_number or None,
-            "exp_date": exp_date or None,
-            "typ": item_type or None,
-            "remove": remove or None
+            "item_number": item_number if item_number not in (None, "", "nan") else record.get("item_number"),
+            "description": description if description not in (None, "", "nan") else record.get("description"),
+            "lot_number": lot_number if lot_number not in (None, "", "nan") else record.get("lot_number"),
+            "exp_date": exp_date if exp_date not in (None, "", "nan") else record.get("exp_date"),
+            "typ": item_type if item_type not in (None, "", "nan") else record.get("typ"),
+            "remove": remove if remove not in (None, "", "nan") else record.get("remove")
         }
 
         # Validate user input
@@ -1001,8 +999,8 @@ def edit_barcode(
                     Select(
                         *[
                             Option(text, value=text,
-                                selected=((values.get("remove", "") if values else (remove or record.get("remove"))) == text))
-                            for text in ["Add", "Remove"]
+                                selected=((int(values.get("remove")) if values else (remove or int(record.get("remove")))) == int(text)))
+                            for text in ["0", "1"]
                         ],
                         name="remove",
                         required=True,
