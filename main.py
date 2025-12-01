@@ -217,7 +217,7 @@ def add_item(
                         style="display:flex; align-items:center; margin-bottom: 15px;"),
                     Div(Label("Quantity", style=LABEL_STYLE),
                         Input(type="number", name="quantity", required=True, step="1",
-                              value=values.get("quantity", "") if values else "",
+                              value=values.get("quantity") if values else "",
                               style=INPUT_STYLE),
                         style="display:flex; align-items:center; margin-bottom: 15px;"),
                     Div(Label("Employee", style=LABEL_STYLE),
@@ -261,7 +261,7 @@ def add_item(
         errors.append("Type cannot exceed 50 characters.")
     if len(values["employee"]) > 50:
         errors.append("Employee cannot exceed 50 characters.")
-    if int(values["quantity"] <= 0):
+    if int(values["quantity"]) <= 0:
         errors.append("Quantity must be greater than 0.")
 
     response = SUPABASE.table("barcodes").select("barcode").eq("barcode", values["barcode"]).execute()
