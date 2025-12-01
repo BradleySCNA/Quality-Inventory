@@ -309,6 +309,8 @@ def remove_item(
     req,
     barcode: str | None = None,
     employee: str | None = None,
+    quantity: str | None = None,
+    remove: str | None = None,
     error_message: str | None = None
 ):
     record = None
@@ -334,10 +336,18 @@ def remove_item(
                     error_message = "This barcode has already been removed."
                     record = None
 
+            if quantity and int(quantity) <= 0:
+                error_message = "Quantity must be greater than 0."
+
     # If user clicked REMOVE button remove the item
-    if error_message == "DO_REMOVE":
+    if remove == "DO_REMOVE" and record:
         if not employee:
             error_message = "Employee is required before removing an item."
+        if int(quantity) > int(record.get("quantity")):
+            error_message = f"Quantity must be less than or equal to {record.get("quantity")}"
+        elif int(quantity) <= 0:
+            error_message = "Quantity must be greater than 0."
+        if error_message:
             return remove_item(req=req, barcode=barcode, error_message=error_message)
     
         data = {
@@ -348,100 +358,119 @@ def remove_item(
             "exp_date": record.get("exp_date"),
             "typ": record.get("typ"),
             "add_remove": "Remove",
-            "quantity": record.get("quantity"),
+            "quantity": int(quantity),
             "trans_date": str(pd.Timestamp.now()),
-            "employee": record.get("employee")
+            "employee": employee
         }
 
         # Add the remove transaction and mark barcode as removed
         SUPABASE.table("transactions").insert(data).execute()
-        SUPABASE.table("barcodes").update({"remove": 1}).eq("barcode", record.get("barcode")).execute()
+        if int(record.get("quantity")) - int(quantity) == 0:
+            SUPABASE.table("barcodes").update({"remove": 1}).eq("barcode", record.get("barcode")).execute()
+        SUPABASE.table("barcodes").update({"quantity": int(record.get("quantity")) - int(quantity)}).eq("barcode", record.get("barcode")).execute()
         return Redirect("/home")
 
     # Render page
     return Title("Remove Item"), Titled(
-        Div(
-            H2("Remove Item", style="text-align:center; margin-bottom:20px;"),
-            Div(
-                P(error_message, style="color:red; font-size:18px; margin-bottom:15px;"),
-                style="text-align:center;"
-            ) if error_message and error_message != "DO_REMOVE" else Div(), # Display error message if any
+    Div(
+    H2("Remove Item", style="text-align:center; margin-bottom:20px;"),
 
-            # Barcode input form
-            Form(
-                Div(
-                    Label("Barcode", style="width: 12%; font-weight:bold; text-align:left;"),
-                    Input(type="number", name="barcode", placeholder="Enter Barcode", step="1",
-                          value=barcode or "", style="width: 12%; padding:6px; margin-top:15px;"),
-                    Button("Search", type="submit", style=SUBMIT_BUTTON_STYLE),
-                    style="display:flex; align-items:center; gap:10px; justify-content:center;"
+        # Display error message if any
+        Div(
+            P(error_message, style="color:red; font-size:18px; margin-bottom:15px;"),
+            style="text-align:center;"
+        ) if error_message and error_message != "DO_REMOVE" else Div(),
+
+        # Barcode input form
+        Form(
+            Div(
+                Label("Barcode", style="width: 35%; font-weight:bold; text-align:left;"),
+                Input(
+                    type="number",
+                    name="barcode",
+                    placeholder="Enter Barcode",
+                    step="1",
+                    value=barcode or "",
+                    style="width: 35%; padding:6px; margin-top:15px;"
                 ),
-                method="POST",
-                style="margin-bottom:30px;"
+                Button("Search", type="submit", style=SUBMIT_BUTTON_STYLE),
+                style="display:flex; align-items:center; gap:10px; justify-content:center;"
+            ),
+            Div(
+                A("Back", href="/home", style=BACK_BUTTON_STYLE)
+            ) if record is None else Div(),
+            method="POST",
+            style="margin-bottom:30px;"
+        ),
+
+        # If valid record found → Show info
+        Form(
+            Div(
+                Label("Item #", style="width: 35%; font-weight:bold; text-align:left;"),
+                P(record.get("item_number") if record else "", style="width:40%; font-weight:normal;"),
+                style="display:flex; margin-bottom:10px;"
+            ),
+            Div(
+                Label("Description", style="width: 35%; font-weight:bold; text-align:left;"),
+                P(record.get("description") if record else "", style="width:40%; font-weight:normal;"),
+                style="display:flex; margin-bottom:10px;"
+            ),
+            Div(
+                Label("Lot #", style="width: 35%; font-weight:bold; text-align:left;"),
+                P(record.get("lot_number") if record else "", style="width:40%; font-weight:normal;"),
+                style="display:flex; margin-bottom:10px;"
+            ),
+            Div(
+                Label("Exp Date", style="width: 35%; font-weight:bold; text-align:left;"),
+                P(record.get("exp_date") if record else "", style="width:40%; font-weight:normal;"),
+                style="display:flex; margin-bottom:10px;"
+            ),
+            Div(
+                Label("Type", style="width: 35%; font-weight:bold; text-align:left;"),
+                P(record.get("typ") if record else "", style="width:40%; font-weight:normal;"),
+                style="display:flex; margin-bottom:10px;"
+            ),
+            Div(
+                Label("Quantity", style="width: 35%; font-weight:bold; text-align:left;"),
+                Input(
+                    type="number",
+                    name="quantity",
+                    step="1",
+                    placeholder=record.get("quantity", "") if record else "",
+                    style="width:40%; font-weight:normal;",
+                    required=True
+                ),
+                style="display:flex; margin-bottom:10px;"
+            ),
+            Div(
+                Label("Employee", style="width: 35%; font-weight:bold; text-align:left;"),
+                Input(
+                    type="text",
+                    name="employee",
+                    style="width:40%; font-weight:normal;",
+                    required=True
+                ),
+                style="display:flex; margin-bottom:10px;"
             ),
 
-            # If valid record found → Show info
+            # Hidden fields
+            Input(type="hidden", name="barcode", value=barcode or ""),
+            Input(type="hidden", name="remove", value="DO_REMOVE"),
+
+            # Bottom Buttons
             Div(
-                *( 
-                    [
-                        Div(
-                            Label("Item #", style="width: 35%; font-weight:bold; align-items:left;"),
-                            P(record.get("item_number"), style="width:40%; font-weight:normal;"),
-                            style="display:flex; margin-bottom:10px;"
-                        ),
-                        Div(
-                            Label("Description", style="width: 35%; font-weight:bold; align-items:left;"),
-                            P(record.get("description"), style="width:40%; font-weight:normal;"),
-                            style="display:flex; margin-bottom:10px;"
-                        ),
-                        Div(
-                            Label("Lot #", style="width: 35%; font-weight:bold; align-items:left;"),
-                            P(record.get("lot_number"), style="width:40%; font-weight:normal;"),
-                            style="display:flex; margin-bottom:10px;"
-                        ),
-                        Div(
-                            Label("Exp Date", style="width: 35%; font-weight:bold; align-items:left;"),
-                            P(record.get("exp_date"), style="width:40%; font-weight:normal;"),
-                            style="display:flex; margin-bottom:10px;"
-                        ),
-                        Div(
-                            Label("Type", style="width: 35%; font-weight:bold; align-items:left;"),
-                            P(record.get("typ"), style="width:40%; font-weight:normal;"),
-                            style="display:flex; margin-bottom:10px;"
-                        ),
-                        Div(
-                            Label("Quantity", style="width: 35%; font-weight:bold; align-items:left;"),
-                            P(record.get("quantity"), style="width:40%; font-weight:normal;"),
-                            style="display:flex; margin-bottom:10px;"
-                        ),
-                        Div(
-                            Label("Employee", style="width: 35%; font-weight:bold; align-items:left;"),
-                            Input(type="text", name="employee", style="width:40%; font-weight:normal;", required=True),
-                            style="display:flex; margin-bottom:10px;"
-                        )
-                    ] if record else []
-                ),
+                A("Back", href="/home", style=BACK_BUTTON_STYLE),
+                Button("Remove", type="submit", style=SUBMIT_BUTTON_STYLE + "background:#d9534f;"),
+                style="display:flex; justify-content:space-between; margin-top:30px;"
+            ),
 
-                # Bottom Buttons
-                Div(
-                    A("Back", href="/home", style=BACK_BUTTON_STYLE),
-                    
-                    # Remove button posts a special flag "DO_REMOVE"
-                    Form(
-                        Input(type="hidden", name="barcode", value=barcode or ""),
-                        Input(type="hidden", name="employee", value=employee or ""),
-                        Input(type="hidden", name="error_message", value="DO_REMOVE"),
-                        Button("Remove", type="submit", style=SUBMIT_BUTTON_STYLE + "background:#d9534f;"),
-                        method="POST"
-                    ) if record else Div(),
-
-                    style="display:flex; justify-content:space-between; margin-top:30px;"
-                ),
-
-                style="max-width:600px; margin:auto;"
-            )
-        )
+            method="POST",
+            style="max-width:600px; margin:auto; justify-content: space-between;"
+        ) if record else Div(),
+        style="max-width:600px; margin:auto;"
     )
+)
+
 
 # Form to view, edit, and filter transactions
 @rt("/transactions", methods=["GET", "POST"])
@@ -1218,17 +1247,17 @@ def export_excel(req):
 
     # Fetch data from Supabase and reformat
     df_transactions = pd.DataFrame(SUPABASE.table("transactions").select("*").execute().data)
-    df_transactions = df_transactions[["trans_id", "barcode", "item_number", "description", "lot_number", "exp_date", "typ", "add_remove", "trans_date", "employee"]]
+    df_transactions = df_transactions[["trans_id", "barcode", "item_number", "description", "lot_number", "exp_date", "typ", "add_remove", "quantity", "trans_date", "employee"]]
     df_transactions.sort_values(by="trans_id", ascending=False, inplace=True)
     df_barcodes = pd.DataFrame(SUPABASE.table("barcodes").select("*").execute().data)
-    df_barcodes = df_barcodes[["barcode", "item_number", "description", "lot_number", "exp_date", "typ", "remove"]]
+    df_barcodes = df_barcodes[["barcode", "item_number", "description", "lot_number", "exp_date", "typ", "quantity", "remove"]]
     df_barcodes.sort_values(by="barcode", ascending=False, inplace=True)
 
     # Create inventory sheet
     if not df_barcodes.empty:
         df_inventory = df_barcodes[df_barcodes["remove"] == 0].groupby(
             ["item_number", "lot_number", "exp_date", "typ"], as_index=False
-        ).agg({"barcode": "count"}).rename(columns={"barcode": "Quantity"})
+        ).agg({"quantity": "sum"})
     else:
         df_inventory = pd.DataFrame()
 
